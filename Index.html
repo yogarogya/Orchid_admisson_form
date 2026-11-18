@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orchid University - Admission Form</title>
+    
+    <!-- PDF Generation and Merging Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+
+    <style>
+        /* =========================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================= */
+        :root {
+            --bg-color: #f2f7ef;
+            --text-color: #1a2955;
+            --border-color: #b4cfb0;
+            --pink-box: #fae8ef;
+            --pink-border: #e3c4d1;
+            --page-width: 210mm;
+            --page-height: 297mm;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; color: var(--text-color); }
+        body { background-color: #555; display: flex; flex-direction: column; align-items: center; padding: 20px 0; gap: 20px; }
+        #form-container { display: flex; flex-direction: column; align-items: center; gap: 20px; max-width: 100%; overflow-x: auto; }
+
+        /* =========================================================
+           PRINT & PDF SETTINGS
+           ========================================================= */
+        @page { size: A4 portrait; margin: 0; }
+        @media print {
+            body { background: none; padding: 0; margin: 0; display: block; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            #form-container { gap: 0; max-width: none; overflow: visible; }
+            .ui-controls { display: none !important; }
+            .no-print { display: none !important; }
+            .page { margin: 0; box-shadow: none !important; border: none; page-break-after: always; page-break-inside: avoid; width: 210mm; height: 297mm; position: relative; overflow: hidden; }
+            input::placeholder, textarea::placeholder { color: transparent; }
+        }
+
+        /* =========================================================
+           UI CONTROLS & UPLOAD SECTION
+           ========================================================= */
+        .ui-controls { width: var(--page-width); max-width: 95%; background: #fff; padding: 15px; border-radius: 8px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); position: sticky; top: 10px; z-index: 1000; }
+        .bottom-controls { width: var(--page-width); max-width: 95%; background: #fff; padding: 15px; border-radius: 8px; display: flex; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 40px; }
+        
+        .ui-btn { padding: 10px 20px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.3s; flex: 1; text-align: center; display: flex; justify-content: center; align-items: center; font-size: 14px;}
+        .ui-btn:disabled { background: #ccc !important; cursor: not-allowed; }
+        .btn-pdf { background: #1a2955; color: #fff; }
+        .btn-reset { background: #d9534f; color: #fff; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; width: 16px; height: 16px; animation: spin 1s linear infinite; margin-left: 10px; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .upload-section { width: var(--page-width); max-width: 95%; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); margin-bottom: 20px; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; background: #f2f7ef; padding: 10px; border: 1px solid #b4cfb0; border-radius: 4px; font-size: 13px; font-weight: bold; margin-bottom: 8px; }
+        .doc-item button { background: #d9534f; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; }
+        .success-text { color: #4CAF50; font-size: 10px; font-weight: normal; margin-left: 10px; }
+
+        /* =========================================================
+           PAGE GEOMETRY & TYPOGRAPHY
+           ========================================================= */
+        .page { width: var(--page-width); height: var(--page-height); background-color: var(--bg-color); position: relative; padding: 12mm 15mm; box-shadow: 0 5px 15px rgba(0,0,0,0.3); overflow: hidden; display: flex; flex-direction: column; transform-origin: top center; }
+        @media (max-width: 800px) { .page { transform: scale(0.9); margin-bottom: -30mm; } }
+        @media (max-width: 600px) { .page { transform: scale(0.7); margin-bottom: -90mm; } }
+        @media (max-width: 400px) { .page { transform: scale(0.5); margin-bottom: -150mm; } }
+
+        h1, h2, h3, p, span, label, input { color: var(--text-color); }
+        input[type="text"], input[type="email"], input[type="number"], input[type="date"], textarea { background: transparent; border: none; border-bottom: 1px dotted var(--border-color); font-size: 11px; outline: none; padding: 2px; }
+        textarea { resize: none; width: 100%; height: 100%; border: none; font-size: 12px; line-height: 1.5; }
+        .bold { font-weight: bold; }
+        .mandatory { color: #d9534f !important; font-weight: bold; }
+        
+        /* =========================================================
+           PREMIUM UPLOAD BOX UI
+           ========================================================= */
+        .upload-box { cursor: pointer; transition: all 0.3s ease; position: relative; background-color: #fff; background-size: contain; background-repeat: no-repeat; background-position: center center; }
+        .upload-box:hover { border-color: #1a2955; box-shadow: inset 0 0 10px rgba(26, 41, 85, 0.1); }
+        .edit-badge { position: absolute; top: 4px; right: 4px; background: rgba(26, 41, 85, 0.8); color: white; font-size: 9px; padding: 3px 6px; border-radius: 4px; display: none; z-index: 20; font-weight: bold; }
+        .upload-hint { font-size: 9px; font-weight: normal; color: #1a2955; margin-top: 5px; background: rgba(242, 247, 239, 0.9); padding: 4px 6px; border-radius: 4px; border: 1px solid var(--border-color); }
+
+        /* =========================================================
+           HEADER & LOGO
+           ========================================================= */
+        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px; }
+        .logo-area { width: 45%; display: flex; flex-direction: column; }
+        .logo-area img { width: 100%; max-width: 280px; height: auto !important; object-fit: contain !important; object-position: left top; display: block; }
+        .admission-helpline { font-size: 9px; margin-top: 5px; }
+        .helpline-number { font-size: 14px; font-weight: bold; }
+        .header-center { width: 25%; text-align: center; margin-top: 35px; }
+        .header-center h1 { font-size: 24px; letter-spacing: 1px; }
+        .header-right { width: 30%; text-align: right; margin-top: 5px; }
+        .header-right p { font-size: 11px; margin-bottom: 2px; }
+        .header-right .tagline { font-size: 14px; color: #1a2955; font-weight: bold; line-height: 1.2; }
+        .top-boxes { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .pink-input-box { background-color: var(--pink-box); border: 1px solid var(--pink-border); border-radius: 4px; padding: 8px 12px; width: 48%; display: flex; align-items: center; }
+        .pink-input-box label { font-size: 12px; font-weight: bold; margin-right: 10px; }
+        .pink-input-box input { border-bottom: none; width: 100%; font-size: 14px; font-weight: bold; }
+
+        /* =========================================================
+           FORM STRUCTURE / GRID
+           ========================================================= */
+        .form-frame { border: 1px solid var(--border-color); border-radius: 6px; flex-grow: 1; display: flex; flex-direction: column; }
+        .section-row { display: flex; border-bottom: 1px solid var(--border-color); }
+        .section-row:last-child { border-bottom: none; }
+        .vertical-label { width: 45px; border-right: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; font-weight: bold; text-align: center; padding: 10px 0; background-color: rgba(255,255,255,0.3); }
+        .vertical-label-right { border-right: none; border-left: 1px solid var(--border-color); }
+        .section-num { font-size: 24px; font-weight: bold; margin-bottom: 10px; writing-mode: horizontal-tb; transform: rotate(180deg); }
+        .content-area { flex-grow: 1; padding: 10px 15px; position: relative; }
+
+        /* =========================================================
+           SPECIFIC SECTIONS & GRIDS
+           ========================================================= */
+        .instructions-list { font-size: 11px; line-height: 1.6; padding-left: 20px; }
+        .instructions-list li { margin-bottom: 2px; }
+        .char-row { display: flex; align-items: center; margin-bottom: 15px; }
+        .char-label { width: 100px; font-size: 11px; font-weight: bold; }
+        .char-box-container { display: flex; gap: 2px; }
+        .char-box { width: 14px; height: 20px; border: 1px dotted var(--border-color); text-align: center; font-size: 11px; text-transform: uppercase; padding: 0; }
+        .flex-row { display: flex; align-items: center; gap: 15px; margin-bottom: 12px; }
+        .flex-row.spaced { justify-content: space-between; }
+        .checkbox-group { display: flex; align-items: center; gap: 8px; }
+        .checkbox-item { display: flex; align-items: center; font-size: 11px; gap: 4px; }
+        input[type="checkbox"], input[type="radio"] { width: 14px; height: 14px; appearance: none; border: 1px solid var(--border-color); border-radius: 2px; cursor: pointer; position: relative; }
+        input[type="checkbox"]:checked::after, input[type="radio"]:checked::after { content: '✔'; position: absolute; font-size: 12px; color: var(--text-color); top: -2px; left: 1px; }
+
+        .sec1-grid { display: flex; width: 100%; gap: 15px; justify-content: space-between; }
+        .sec1-left { flex-grow: 1; } 
+        .sec1-right { flex-shrink: 0; display: flex; justify-content: flex-end; } 
+        .photo-box { width: 35mm; min-width: 35mm; height: 45mm; min-height: 45mm; flex-shrink: 0; border: 1px solid var(--border-color); border-radius: 4px; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2px; text-align: center; overflow: hidden; }
+        .photo-box span { font-size: 10px; font-weight: bold; }
+
+        .parent-grid { display: grid; grid-template-columns: 100px 1fr 1fr; gap: 15px 10px; align-items: center; }
+        .parent-header { text-align: center; font-weight: bold; font-size: 12px; margin-bottom: 5px; }
+        .address-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .address-box { border: 1px dotted var(--border-color); border-radius: 4px; padding: 5px; height: 70px; margin-bottom: 10px; }
+        .input-line { display: flex; margin-bottom: 10px; align-items: center;}
+        .input-line label { font-size: 11px; font-weight: bold; width: 80px; }
+        .input-line input { flex-grow: 1; border-bottom: 1px dotted var(--border-color); }
+        .academic-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 5px; }
+        .academic-table th, .academic-table td { border: 1px solid var(--border-color); text-align: center; padding: 6px; }
+        .academic-table th { font-weight: bold; background: rgba(255,255,255,0.4); }
+        .academic-table td { height: 28px; }
+        .academic-table input { width: 100%; text-align: center; border: none; font-size: 10px; }
+        .course-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .course-list { display: flex; flex-direction: column; gap: 15px; margin-top: 10px; }
+        .doc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .doc-col { display: flex; flex-direction: column; gap: 12px; margin-top: 10px; }
+        .guidelines-box { padding: 5px; }
+        .guidelines-title { font-weight: bold; font-size: 12px; margin-bottom: 10px; }
+        .guidelines-list { font-size: 10px; line-height: 1.4; padding-left: 20px; text-align: justify; }
+        .guidelines-list li { margin-bottom: 4px; }
+        .declaration-box { margin-top: 10px; }
+        .declaration-title { font-weight: bold; font-size: 12px; text-transform: uppercase; margin-bottom: 5px; }
+        .declaration-text { font-size: 10px; line-height: 1.4; text-align: justify; }
+
+        .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+        .sig-box { border: 1px solid var(--border-color); border-radius: 4px; height: 100px; padding: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center;}
+        .sig-label { position: absolute; top: 10px; left: 10px; font-size: 10px; font-weight: bold; color: #4CAF50; }
+        .sig-bottom { position: absolute; bottom: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; z-index: 10; }
+        .sig-bottom-input { display: flex; gap: 5px; font-size: 10px; color: #4CAF50; align-items: center; background: rgba(255,255,255,0.8); padding: 2px 5px; border-radius: 3px;}
+        .sig-bottom-input input { border-bottom: 1px dotted #4CAF50; width: 60px; font-size: 10px; color: var(--text-color); background: transparent; cursor: text; }
+
+        .official-use { margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .official-use-title { font-weight: bold; font-size: 12px; }
+        .official-logo img { width: 100%; max-width: 180px; height: auto !important; object-fit: contain !important; object-position: right center; display: block; }
+        .page-num { position: absolute; bottom: 15mm; right: 15mm; font-size: 14px; font-weight: bold; background: rgba(255,255,255,0.7); padding: 5px 10px; border-radius: 15px; }
+        .sanskrit-footer { text-align: center; font-size: 28px; font-weight: bold; color: rgba(180, 207, 176, 0.4); margin-top: auto; padding-bottom: 10px;}
+    </style>
+</head>
+<body>
+
+    <!-- TOP UI CONTROLS -->
+    <div class="ui-controls no-print">
+        <button class="ui-btn btn-reset" onclick="resetForm()">Reset Form</button>
+        <button class="ui-btn btn-pdf download-btn-class" onclick="generateMergedPDF()">Download / Save PDF <div class="loader loader-class"></div></button>
+    </div>
+
+    <!-- WRAPPER FOR ALL 3 PAGES -->
+    <div id="form-container">
+        <!-- ========================================== PAGE 1 ========================================== -->
+        <div class="page" id="page1">
+            <div class="header">
+                <div class="logo-area">
+                    <img src="https://i.postimg.cc/sDyhz6RW/orchid-logo.jpg" alt="Orchid University Logo">
+                    <div class="admission-helpline">ADMISSION HELPLINE &nbsp; <span class="helpline-number">18003099996</span><br>connect@orchiduniversity.ac.in</div>
+                </div>
+                <div class="header-center"><h1>Admission Form</h1></div>
+                <div class="header-right">
+                    <div class="tagline">India's First Value-Driven<br>Intergenerational<br>University</div>
+                    <div style="margin-top: 15px;"><p>www.orchiduniversity.ac.in</p><p style="font-size: 9px;">Upper Singhik, Mangan District</p><p style="font-size: 9px;">Sikkim - 737116</p></div>
+                </div>
+            </div>
+
+            <div class="top-boxes">
+                <div class="pink-input-box"><label>Form No.</label><input type="text" id="formNo" class="save-state"></div>
+                <div class="pink-input-box"><label>Enrollment No.</label><input type="text" id="enrollmentNo" class="save-state"></div>
+            </div>
+
+            <div class="form-frame">
+                <div class="section-row">
+                    <div class="vertical-label"><span>INSTRUCTIONS FOR</span><span>APPLICANTS</span></div>
+                    <div class="content-area">
+                        <ol class="instructions-list">
+                            <li>Please fill the admission form in BLOCK LETTERS.</li>
+                            <li>All mandatory (*) fields must be completed.</li>
+                            <li>Attach self-attested copies of all required documents.</li>
+                            <li>Incomplete forms are liable to be rejected.</li>
+                            <li>Submission of the form does not guarantee admission.</li>
+                            <li>Admission is subject to eligibility verification and approval by the University.</li>
+                            <li>Students are advised to keep a copy of the filled application form for future reference.</li>
+                        </ol>
+                    </div>
+                </div>
+
+                <div class="section-row">
+                    <div class="vertical-label"><span class="section-num">1</span><span>PERSONAL INFORMATION</span></div>
+                    <div class="content-area">
+                        <div class="sec1-grid">
+                            <div class="sec1-left">
+                                <div class="char-row">
+                                    <div class="char-label">Full Name <span class="mandatory">*</span></div>
+                                    <div class="char-box-container" id="fullNameBoxes"><script>for(let i=0;i<24;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto required-check" data-id="fn_'+i+'">');</script></div>
+                                </div>
+                                <div class="char-row" style="justify-content: space-between;">
+                                    <div style="display:flex; align-items:center;">
+                                        <div class="char-label" style="width: 80px;">Date of Birth</div>
+                                        <div class="char-box-container" style="margin-right:20px;">
+                                            <input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="D"><input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="D" style="margin-right: 5px;">
+                                            <input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="M"><input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="M" style="margin-right: 5px;">
+                                            <input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="Y"><input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="Y"><input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="Y"><input type="text" maxlength="1" class="char-box save-state char-auto" placeholder="Y">
+                                        </div>
+                                    </div>
+                                    <div style="display:flex; align-items:center;">
+                                        <div class="char-label" style="width:100px;">Aadhaar Number</div>
+                                        <div class="char-box-container"><script>for(let i=0;i<12;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto" data-id="aadhaar_'+i+'">');</script></div>
+                                    </div>
+                                </div>
+                                <div style="border: 1px dotted var(--border-color); padding: 10px; margin-bottom:15px; border-radius:4px;">
+                                    <div class="flex-row spaced" style="border-bottom:1px dotted var(--border-color); padding-bottom:8px;">
+                                        <div class="checkbox-group"><span class="bold" style="font-size:11px; width:50px;">Gender</span><label class="checkbox-item"><input type="radio" name="gender" class="save-state"> Male</label><label class="checkbox-item"><input type="radio" name="gender" class="save-state"> Female</label></div>
+                                        <div class="checkbox-group"><span class="bold" style="font-size:11px;">Category:</span><label class="checkbox-item"><input type="radio" name="category" class="save-state"> General</label><label class="checkbox-item"><input type="radio" name="category" class="save-state"> OBC</label><label class="checkbox-item"><input type="radio" name="category" class="save-state"> SC</label><label class="checkbox-item"><input type="radio" name="category" class="save-state"> ST</label><label class="checkbox-item"><input type="radio" name="category" class="save-state"> Others <input type="text" style="width:50px; font-size:9px;" class="save-state" placeholder="(Please specify)"></label></div>
+                                    </div>
+                                    <div class="flex-row" style="padding-top:8px;">
+                                        <span class="bold" style="font-size:11px; width:50px;">Religion</span>
+                                        <div class="checkbox-group" style="gap:12px; flex-wrap:wrap;">
+                                            <label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Hindu</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Muslim</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Christian</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Sikh</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Buddhist</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Jain</label><label class="checkbox-item"><input type="radio" name="religion" class="save-state"> Others <input type="text" style="width:50px; font-size:9px;" class="save-state" placeholder="(Please specify)"></label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="border: 1px dotted var(--border-color); padding: 10px; border-radius:4px;">
+                                    <div class="flex-row"><span class="bold" style="font-size:11px; width:70px;">Nationality</span><div class="checkbox-group"><label class="checkbox-item"><input type="radio" name="nationality" class="save-state"> Indian</label><label class="checkbox-item"><input type="radio" name="nationality" class="save-state"> NRI</label><label class="checkbox-item"><input type="radio" name="nationality" class="save-state"> OCI</label><label class="checkbox-item"><input type="radio" name="nationality" class="save-state"> Others <input type="text" style="width:80px; font-size:9px;" class="save-state" placeholder="(Please specify)"></label></div></div>
+                                    <div class="input-line"><label>Blood Group <span style="font-weight:normal; font-size:8px;">(Provide accurate)</span></label><input type="text" class="save-state"></div>
+                                    <div class="input-line"><label>Contact Number <span style="font-weight:normal; font-size:8px;">(Mobile Number)</span></label><div class="char-box-container"><script>for(let i=0;i<10;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto" data-id="mob_'+i+'">');</script></div></div>
+                                    <div class="input-line"><label>Alternate Number</label><div class="char-box-container"><script>for(let i=0;i<10;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto" data-id="alt_'+i+'">');</script></div></div>
+                                    <div class="input-line"><label>Email ID</label><input type="email" class="save-state"></div>
+                                </div>
+                            </div>
+                            <div class="sec1-right">
+                                <!-- PREMIUM PHOTO BOX -->
+                                <div class="photo-box upload-box" id="photoBox" onclick="document.getElementById('photoUpload').click()">
+                                    <div class="edit-badge no-print" id="badge_photoBox">✏️ Change</div>
+                                    <div id="content_photoBox" style="pointer-events: none;">
+                                        <span>Passport Size<br>Color Photo</span><br>
+                                        <span class="small-text mandatory" style="font-size:7px;">Paste here in this block</span><br>
+                                        <div class="upload-hint no-print mandatory">📸 Click to Upload *</div>
+                                    </div>
+                                    <input type="file" id="photoUpload" style="display:none;" accept=".jpg, .jpeg, .png" onchange="previewImage(this, 'photoBox')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="vertical-label vertical-label-right"><span>FILL IN CAPITAL LETTERS</span></div>
+                </div>
+
+                <!-- Section 2: Parent Details -->
+                <div class="section-row" style="border-bottom: none; flex-grow: 1;">
+                    <div class="vertical-label"><span class="section-num">2</span><span>PARENT DETAILS</span></div>
+                    <div class="content-area">
+                        <div class="parent-grid">
+                            <div></div> <div class="parent-header">Father</div><div class="parent-header">Mother</div>
+                            <div class="bold" style="font-size:11px;">Full Name</div><div><div class="char-box-container"><script>for(let i=0;i<16;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto">');</script></div></div><div><div class="char-box-container"><script>for(let i=0;i<16;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto">');</script></div></div>
+                            <div class="bold" style="font-size:11px;">Qualification</div><div><input type="text" style="width:100%; border-bottom: 1px dotted var(--border-color);" class="save-state"></div><div><input type="text" style="width:100%; border-bottom: 1px dotted var(--border-color);" class="save-state"></div>
+                            <div class="bold" style="font-size:11px;">Profession</div><div><input type="text" style="width:100%; border-bottom: 1px dotted var(--border-color);" class="save-state"></div><div><input type="text" style="width:100%; border-bottom: 1px dotted var(--border-color);" class="save-state"></div>
+                            <div class="bold" style="font-size:11px;">Mobile Number</div><div><div class="char-box-container"><script>for(let i=0;i<10;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto">');</script></div></div><div><div class="char-box-container"><script>for(let i=0;i<10;i++) document.write('<input type="text" maxlength="1" class="char-box save-state char-auto">');</script></div></div>
+                        </div>
+                    </div>
+                    <div class="vertical-label vertical-label-right"><span>FILL IN CAPITAL LETTERS</span></div>
+                </div>
+            </div>
+            <div class="sanskrit-footer">यत् कर्तुं न शक्यते तत् कर्तव्यम् अस्ति ।</div>
+            <div class="page-num no-print">1/3</div>
+        </div>
+
+        <!-- ========================================== PAGE 2 ========================================== -->
+        <div class="page" id="page2">
+            <div class="form-frame" style="height: 100%;">
+                <div class="section-row">
+                    <div class="vertical-label"><span class="section-num">3</span><span>ADDRESS DETAILS</span></div>
+                    <div class="content-area">
+                        <div class="address-grid">
+                            <div>
+                                <div class="bold" style="font-size:11px; margin-bottom:5px;">Permanent Address</div>
+                                <div class="address-box"><textarea placeholder="Full Address" class="save-state" id="permAddr"></textarea></div>
+                                <div class="input-line"><label>City</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>State</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>Pincode</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>Country <span style="font-weight:normal; font-size:8px;">(If other than India)</span></label><input type="text" class="save-state"></div>
+                            </div>
+                            <div>
+                                <div class="bold" style="font-size:11px; margin-bottom:5px;">Present Address <span style="font-weight:normal; font-size:9px;">(If other than permanent address)</span></div>
+                                <div class="address-box"><textarea placeholder="Full Address" class="save-state" id="presAddr"></textarea></div>
+                                <div class="input-line"><label>City</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>State</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>Pincode</label><input type="text" class="save-state"></div>
+                                <div class="input-line"><label>Country <span style="font-weight:normal; font-size:8px;">(If other than India)</span></label><input type="text" class="save-state"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="section-row">
+                    <div class="vertical-label"><span class="section-num">4</span><span>ACADEMIC QUALIFICATIONS</span></div>
+                    <div class="content-area">
+                        <table class="academic-table">
+                            <thead><tr><th>Examination</th><th>Year of Passing</th><th>Board/University</th><th>Total Marks</th><th>Marks Obtained</th><th>Grades</th><th>Documents<br>(YES/NO)</th></tr></thead>
+                            <tbody>
+                                <tr><td style="text-align:left; font-weight:bold;">Secondary (10ᵗʰ)</td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td></tr>
+                                <tr><td style="text-align:left; font-weight:bold;">Sr. Secondary (12ᵗʰ)</td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td></tr>
+                                <tr><td style="text-align:left; font-weight:bold;">Graduation (UG)</td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td></tr>
+                                <tr><td style="text-align:left; font-weight:bold;">Post Graduation (PG)</td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td></tr>
+                                <tr><td style="text-align:left; font-weight:bold;">Other (Specify)</td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td><td><input type="text" class="save-state"></td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="vertical-label vertical-label-right"><span>PHOTOCOPIES OF DOCUMENTS</span></div>
+                </div>
+                <div class="section-row">
+                    <div class="vertical-label"><span class="section-num">5</span><span>COURSE DETAILS</span></div>
+                    <div class="content-area">
+                        <div class="course-grid">
+                            <div>
+                                <div class="bold" style="font-size:12px;">Course Category</div>
+                                <div style="font-size:10px; margin-bottom:10px;">(Select the applicable course category)</div>
+                                <div style="border: 1px dotted var(--border-color); padding: 10px; border-radius:4px; margin-right: 30px;">
+                                    <div class="course-list">
+                                        <label class="checkbox-item"><input type="checkbox" class="save-state"> CERT (Certificate)</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="save-state"> Diploma</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="save-state"> UG (Under Graduate)</label>
+                                        <label class="checkbox-item"><input type="checkbox" class="save-state"> PG (Post Graduate)</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="bold" style="font-size:12px;">Others</div>
+                                <div style="font-size:10px; margin-bottom:10px;">(You can specify your choice)</div>
+                                <div style="border: 1px dotted var(--border-color); padding: 15px; border-radius:4px; height: 110px;">
+                                    <!-- Added ID for dynamic file naming -->
+                                    <div class="input-line"><label style="width: 120px;">Program Type</label><input type="text" id="courseProgramInput" class="save-state"></div>
+                                    <div class="input-line" style="margin-top: 25px;"><label style="width: 120px;">Specialization / Stream</label><input type="text" class="save-state"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="vertical-label vertical-label-right"><span>CHECK THE BOXES</span></div>
+                </div>
+                <div class="section-row" style="border-bottom:none; flex-grow:1;">
+                    <div class="vertical-label"><span class="section-num">6</span><span>DOCUMENTS SUBMITTED</span></div>
+                    <div class="content-area">
+                        <div class="doc-grid">
+                            <div>
+                                <div class="bold" style="font-size:12px;">Academic</div>
+                                <div class="doc-col">
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> 10th Mark Sheet</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> 12th Mark Sheet</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Graduation<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mark Sheet</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Post Graduation<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mark Sheet</label>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="bold" style="font-size:12px;">Identity</div>
+                                <div class="doc-col">
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Photographs<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(Passport Size)</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Aadhar Card</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Identity Card</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Passport (If other Nationality)</label>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="bold" style="font-size:12px;">Others</div>
+                                <div class="doc-col">
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Transfer Certificate</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Migration Certificate</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> Character Certificate</label>
+                                    <label class="checkbox-item"><input type="checkbox" class="save-state"> <input type="text" style="width:120px;" placeholder="(Please specify, if any other)" class="save-state"></label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="vertical-label vertical-label-right"><span>PHOTOCOPIES OF DOCUMENTS</span></div>
+                </div>
+            </div>
+            <div class="page-num no-print">2/3</div>
+        </div>
+
+        <!-- ========================================== PAGE 3 ========================================== -->
+        <div class="page" id="page3">
+            <div class="form-frame" style="height: 100%; border-color: transparent;">
+                <div style="border: 1px solid var(--border-color); border-radius: 6px; display: flex; flex-direction: column; flex-grow: 1;">
+                    <div class="guidelines-box" style="border-bottom: 1px solid var(--border-color); padding: 15px;">
+                        <div class="guidelines-title">Guidelines & Norms</div>
+                        <ol class="guidelines-list">
+                            <li>Admission to Orchid University is provisional and subject to verification of original documents.</li>
+                            <li>The University reserves the right to cancel admission if any information submitted by the student is found to be incorrect, incomplete, or misleading.</li>
+                            <li>The student shall abide by all rules, regulations, policies, and code of conduct prescribed by Orchid University from time to time.</li>
+                            <li>The University reserves the right to modify academic schedules, examination patterns, curriculum structure, and institutional policies whenever required.</li>
+                            <li>Students must maintain minimum attendance as prescribed by the University and statutory authorities.</li>
+                            <li>Any act of indiscipline, misconduct, ragging, or violation of University rules may lead to disciplinary action, including suspension or cancellation of admission.</li>
+                            <li>Students are responsible for regularly checking official communication shared through email, portal, SMS, or other University channels.</li>
+                            <li>Orchid University shall not be responsible for any loss of personal belongings within the campus premises.</li>
+                            <li>Submission of false documents or suppression of facts may lead to cancellation of admission at any stage.</li>
+                            <li>The University reserves the right to withhold results, certificates, or academic records in case of non-payment of dues or disciplinary matters.</li>
+                            <li>Students enrolled under industry-integrated programs must also comply with the policies and regulations of the respective industry partner.</li>
+                            <li>In case of withdrawal of admission, the candidate shall not be eligible for any refund from the University, unless otherwise specified under the University refund policy.</li>
+                            <li>No candidate shall be allowed to pursue two regular/full-time courses simultaneously during the same academic year.</li>
+                            <li>The University shall not be responsible for any delay in postal transit or non-receipt of Admission Letter, Welcome Letter, Interview Letter, Intimation Letter, or any other admission-related communication.</li>
+                            <li>All disputes, if any, shall be subject to the jurisdiction applicable to Orchid University.</li>
+                            <li>The University reserves the flexibility to modify or reassign the student's training/work location, industry partner, or study location or Department, whenever required, in accordance with academic planning and operational considerations.</li>
+                        </ol>
+                    </div>
+                    <div class="declaration-box" style="padding: 15px; flex-grow: 1;">
+                        <div class="declaration-title">DECLARATION</div>
+                        <div class="declaration-text">
+                            I hereby declare that the information and documents submitted by me are true and authentic to the best of my knowledge. I understand that my admission is provisional and subject to verification by Orchid University. I agree to abide by all rules, regulations, academic policies, code of conduct, and disciplinary guidelines prescribed by the University from time to time. I also understand that submission of false information or misconduct may lead to cancellation of admission and disciplinary action as deemed appropriate by the University.
+                        </div>
+                        <div class="signature-grid">
+                            <!-- PREMIUM SIGNATURE BOX (APPLICANT) -->
+                            <div class="sig-box upload-box" id="sigApplicant" onclick="document.getElementById('sigAppUpload').click()">
+                                <div class="edit-badge no-print" id="badge_sigApplicant">✏️ Change</div>
+                                <span class="sig-label">Signature of Applicant</span>
+                                <div id="content_sigApplicant" class="upload-hint no-print">✍️ Click to Upload</div>
+                                <input type="file" id="sigAppUpload" style="display:none;" accept=".jpg, .jpeg, .png" onchange="previewImage(this, 'sigApplicant')">
+                                <div class="sig-bottom" onclick="event.stopPropagation()">
+                                    <div class="sig-bottom-input">Place <input type="text" class="save-state"></div><div class="sig-bottom-input">Date <input type="text" class="save-state"></div>
+                                </div>
+                            </div>
+                            <!-- PREMIUM SIGNATURE BOX (PARENT) -->
+                            <div class="sig-box upload-box" id="sigParent" onclick="document.getElementById('sigParentUpload').click()">
+                                <div class="edit-badge no-print" id="badge_sigParent">✏️ Change</div>
+                                <span class="sig-label">Signature of Parent / Guardian</span>
+                                <div id="content_sigParent" class="upload-hint no-print">✍️ Click to Upload</div>
+                                <input type="file" id="sigParentUpload" style="display:none;" accept=".jpg, .jpeg, .png" onchange="previewImage(this, 'sigParent')">
+                                <div class="sig-bottom" onclick="event.stopPropagation()">
+                                    <div class="sig-bottom-input">Place <input type="text" class="save-state"></div><div class="sig-bottom-input">Date <input type="text" class="save-state"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="official-use">
+                    <div class="official-use-title">FOR OFFICIAL USE</div>
+                    <div class="official-logo"><img src="https://i.postimg.cc/sDyhz6RW/orchid-logo.jpg" alt="Orchid University Logo"></div>
+                </div>
+            </div>
+            <div class="sanskrit-footer">यत् कर्तुं न शक्यते तत् कर्तव्यम् अस्ति ।</div>
+            <div class="page-num no-print">3/3</div>
+        </div>
+    </div> <!-- END FORM CONTAINER -->
+
+    <!-- ========================================== MULTIPLE DOCUMENT UPLOAD SECTION ========================================== -->
+    <div class="upload-section no-print">
+        <h3 style="color: #1a2955; margin-bottom: 8px;">📎 Upload Supporting Documents (Marksheets, ID, etc.)</h3>
+        <p style="font-size: 11px; color: #666; margin-bottom: 15px;">You can select multiple files. <br><span style="color:#3498db; font-weight:bold;">⚡ Auto-Compression is Active:</span> Images will be automatically resized and optimized for fast PDF merging.</p>
+        
+        <input type="file" id="multiDocUpload" multiple accept=".pdf, .jpg, .jpeg, .png" onchange="handleDocUpload(event)" style="border: 1px dashed #3498db; padding: 15px; width: 100%; border-radius: 4px; font-size: 13px; cursor: pointer; background: #f4fafe; text-align: center;">
+        
+        <div id="docList" style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;"></div>
+    </div>
+
+    <!-- BOTTOM UI CONTROLS (NEWLY ADDED) -->
+    <div class="bottom-controls no-print">
+        <button class="ui-btn btn-pdf download-btn-class" style="max-width: 300px;" onclick="generateMergedPDF()">Download / Save PDF <div class="loader loader-class"></div></button>
+    </div>
+
+    <!-- ========================================== JAVASCRIPT ========================================== -->
+    <script>
+        // --- 1. Basic Form Features & Focus Jump ---
+        document.addEventListener('input', function(e) {
+            if (e.target.classList.contains('char-auto')) {
+                if (e.target.value.length === e.target.maxLength) {
+                    let next = e.target.nextElementSibling;
+                    if (next && next.classList.contains('char-auto')) next.focus();
+                }
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Backspace' && e.target.classList.contains('char-auto') && e.target.value === '') {
+                let prev = e.target.previousElementSibling;
+                if (prev && prev.classList.contains('char-auto')) prev.focus();
+            }
+        });
+
+        const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+
+        // =========================================================================
+        // ✨ SMART IMAGE COMPRESSOR & RESIZER UTILITY
+        // =========================================================================
+        function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.7) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = event => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; }
+                        } else {
+                            if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        ctx.fillStyle = "#FFFFFF"; 
+                        ctx.fillRect(0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                        
+                        fetch(dataUrl)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                const newFileName = file.name.replace(/\.[^/.]+$/, "") + "_compressed.jpg";
+                                const newFile = new File([blob], newFileName, { type: 'image/jpeg', lastModified: Date.now() });
+                                resolve({ file: newFile, dataUrl: dataUrl });
+                            });
+                    };
+                    img.onerror = error => reject(error);
+                };
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        // --- 2. Single Image Upload Handler (Photos & Signatures) ---
+        async function previewImage(input, boxId) {
+            const box = document.getElementById(boxId);
+            const contentHint = document.getElementById('content_' + boxId);
+            const editBadge = document.getElementById('badge_' + boxId);
+
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                
+                if (!validImageTypes.includes(file.type)) {
+                    alert(`आपने गलत फॉर्मेट अपलोड किया है! ❌\n\nकृपया फोटो/सिग्नेचर के लिए केवल JPG, JPEG या PNG फॉर्मेट का ही उपयोग करें।`);
+                    input.value = ''; 
+                    return;
+                }
+
+                try {
+                    const compressed = await compressImage(file, 800, 800, 0.7); 
+                    box.style.backgroundImage = `url(${compressed.dataUrl})`;
+                    if(contentHint) contentHint.style.display = 'none'; 
+                    if(editBadge) editBadge.style.display = 'block'; 
+                    localStorage.setItem('img_' + boxId, compressed.dataUrl);
+                } catch(e) {
+                    alert("फोटो प्रोसेस करने में कुछ तकनीकी दिक्कत आई। कृपया दोबारा प्रयास करें।");
+                }
+            }
+        }
+
+        // --- 3. Data Preservation (Local Storage) ---
+        const inputs = document.querySelectorAll('.save-state');
+        inputs.forEach((input, index) => { if (!input.id) input.id = 'input_state_' + index; });
+
+        window.addEventListener('load', () => {
+            inputs.forEach(input => {
+                const savedValue = localStorage.getItem(input.id);
+                if (savedValue !== null) {
+                    if (input.type === 'checkbox' || input.type === 'radio') input.checked = (savedValue === 'true');
+                    else input.value = savedValue;
+                }
+            });
+
+            ['photoBox', 'sigApplicant', 'sigParent'].forEach(boxId => {
+                const savedImg = localStorage.getItem('img_' + boxId);
+                if (savedImg) {
+                    document.getElementById(boxId).style.backgroundImage = `url(${savedImg})`;
+                    const contentHint = document.getElementById('content_' + boxId);
+                    const editBadge = document.getElementById('badge_' + boxId);
+                    if(contentHint) contentHint.style.display = 'none';
+                    if(editBadge) editBadge.style.display = 'block';
+                }
+            });
+        });
+
+        document.addEventListener('input', (e) => {
+            if (e.target.classList.contains('save-state')) {
+                const val = (e.target.type === 'checkbox' || e.target.type === 'radio') ? e.target.checked : e.target.value;
+                localStorage.setItem(e.target.id, val);
+            }
+        });
+
+        function resetForm() {
+            if(confirm('क्या आप फॉर्म का सारा डेटा और अटैचमेंट डिलीट करना चाहते हैं?')) {
+                localStorage.clear();
+                inputs.forEach(input => {
+                    if (input.type === 'checkbox' || input.type === 'radio') input.checked = false;
+                    else input.value = '';
+                });
+                ['photoBox', 'sigApplicant', 'sigParent'].forEach(boxId => {
+                    document.getElementById(boxId).style.backgroundImage = 'none';
+                    const contentHint = document.getElementById('content_' + boxId);
+                    const editBadge = document.getElementById('badge_' + boxId);
+                    if(contentHint) contentHint.style.display = 'block';
+                    if(editBadge) editBadge.style.display = 'none';
+                });
+                attachedDocs = [];
+                renderDocList();
+            }
+        }
+
+        // --- 4. Multi Document Upload Logic ---
+        let attachedDocs = [];
+
+        async function handleDocUpload(event) {
+            const files = Array.from(event.target.files);
+            
+            for (let file of files) {
+                const fileNameLower = file.name.toLowerCase();
+                const isPdf = (file.type === 'application/pdf' || fileNameLower.endsWith('.pdf'));
+                const isImage = validImageTypes.includes(file.type) || fileNameLower.match(/\.(jpg|jpeg|png)$/);
+                
+                if (!isPdf && !isImage) {
+                    alert(`फाइल "${file.name}" का फॉर्मेट गलत है! ❌\n\nकृपया केवल PDF, JPG या PNG अपलोड करें।`);
+                    continue; 
+                }
+
+                if (isImage) {
+                    try {
+                        const compressed = await compressImage(file, 1200, 1200, 0.7);
+                        attachedDocs.push(compressed.file); 
+                    } catch (e) {
+                        alert(`"${file.name}" को कंप्रेस करने में त्रुटि आई।`);
+                    }
+                } else if (isPdf) {
+                    if (file.size > 10 * 1024 * 1024) {
+                        alert(`PDF "${file.name}" का साइज़ 10MB से ज़्यादा है। कृपया छोटी PDF फाइल का उपयोग करें।`);
+                        continue;
+                    }
+                    attachedDocs.push(file);
+                }
+            }
+
+            renderDocList();
+            event.target.value = ''; 
+        }
+
+        function removeDoc(index) {
+            attachedDocs.splice(index, 1);
+            renderDocList();
+        }
+
+        function renderDocList() {
+            const list = document.getElementById('docList');
+            list.innerHTML = '';
+            attachedDocs.forEach((file, index) => {
+                let sizeStr = (file.size / 1024).toFixed(1) + " KB";
+                if (file.size > 1024 * 1024) sizeStr = (file.size / (1024*1024)).toFixed(2) + " MB";
+                let successTag = file.name.includes('_compressed') ? '<span class="success-text">(⚡ Optimized)</span>' : '';
+
+                list.innerHTML += `
+                <div class="doc-item">
+                    <span>${index + 1}. ${file.name} [${sizeStr}] ${successTag}</span>
+                    <button onclick="removeDoc(${index})">Delete</button>
+                </div>`;
+            });
+        }
+
+        function validateForm() {
+            let nameFilled = false;
+            document.querySelectorAll('.required-check').forEach(input => {
+                if(input.value.trim() !== '') nameFilled = true;
+            });
+            const photoUploaded = localStorage.getItem('img_photoBox') !== null || (document.getElementById('photoBox').style.backgroundImage !== 'none' && document.getElementById('photoBox').style.backgroundImage !== '');
+
+            if (!nameFilled) { alert("कृपया अपना पूरा नाम (Full Name) दर्ज़ करें।"); return false; }
+            if (!photoUploaded) { alert("कृपया अपनी पासपोर्ट साइज़ फोटो अपलोड करें।"); return false; }
+            return true;
+        }
+
+        // =========================================================================
+        // ✨ NEW: DYNAMIC FILENAME GENERATOR
+        // =========================================================================
+        function getDynamicFileName() {
+            // Get Name
+            let studentName = "";
+            document.querySelectorAll('#fullNameBoxes input').forEach(input => {
+                studentName += input.value;
+            });
+            studentName = studentName.trim().replace(/\s+/g, '_');
+            if(!studentName) studentName = "Student";
+
+            // Get Course
+            let courseInput = document.getElementById('courseProgramInput');
+            let courseName = courseInput ? courseInput.value.trim().replace(/\s+/g, '_') : "";
+            if(!courseName) courseName = "Course";
+
+            // Sanitize filename removing illegal characters
+            let cleanFileName = `${studentName}_${courseName}_Admission_Form`.replace(/[^a-zA-Z0-9_-]/g, '');
+            return cleanFileName + ".pdf";
+        }
+
+        // --- 5. Merge and Download PDF Logic ---
+        async function generateMergedPDF() {
+            if (!validateForm()) return; 
+
+            // Sync UI Loaders for BOTH Top and Bottom Buttons
+            const downloadBtns = document.querySelectorAll('.download-btn-class');
+            const loaders = document.querySelectorAll('.loader-class');
+            
+            downloadBtns.forEach(btn => btn.disabled = true);
+            loaders.forEach(l => l.style.display = 'inline-block'); 
+
+            try {
+                document.querySelectorAll('.save-state').forEach(el => {
+                    if (el.tagName === 'INPUT') {
+                        if (el.type === 'text' || el.type === 'email' || el.type === 'number' || el.type === 'date') el.setAttribute('value', el.value);
+                        if (el.type === 'radio' || el.type === 'checkbox') {
+                            if (el.checked) el.setAttribute('checked', 'checked');
+                            else el.removeAttribute('checked');
+                        }
+                    } else if (el.tagName === 'TEXTAREA') { el.innerHTML = el.value; }
+                });
+
+                // Hide Controls before PDF creation
+                document.querySelector('.ui-controls').style.display = 'none';
+                document.querySelector('.bottom-controls').style.display = 'none';
+                document.querySelector('.upload-section').style.display = 'none';
+                
+                const pages = document.querySelectorAll('.page');
+                pages.forEach(p => { p.style.boxShadow = 'none'; p.style.margin = '0'; p.style.transform = 'none'; });
+
+                const formContainer = document.getElementById('form-container');
+                const dynamicPdfName = getDynamicFileName();
+
+                const opt = { 
+                    margin: 0, 
+                    filename: dynamicPdfName, 
+                    image: { type: 'jpeg', quality: 0.98 }, 
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0 }, 
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' } 
+                };
+
+                const mainPdfBuffer = await html2pdf().set(opt).from(formContainer).output('arraybuffer');
+
+                // Restore UI immediately
+                document.querySelector('.ui-controls').style.display = 'flex';
+                document.querySelector('.bottom-controls').style.display = 'flex';
+                document.querySelector('.upload-section').style.display = 'block';
+                pages.forEach(p => { p.style.boxShadow = '0 5px 15px rgba(0,0,0,0.3)'; p.style.transform = ''; });
+
+                const { PDFDocument } = PDFLib;
+                const mergedPdf = await PDFDocument.load(mainPdfBuffer, { ignoreEncryption: true });
+
+                // Attach external documents perfectly
+                for (let file of attachedDocs) {
+                    try {
+                        const fileBuffer = await file.arrayBuffer();
+                        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                        
+                        if (isPdf) {
+                            const extraPdf = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
+                            const copiedPages = await mergedPdf.copyPages(extraPdf, extraPdf.getPageIndices());
+                            copiedPages.forEach((page) => mergedPdf.addPage(page));
+                        } else {
+                            const img = await mergedPdf.embedJpg(fileBuffer); 
+                            const page = mergedPdf.addPage([595.28, 841.89]); 
+                            const { width, height } = page.getSize();
+                            const imgDims = img.scaleToFit(width - 40, height - 40); 
+                            page.drawImage(img, { x: width / 2 - imgDims.width / 2, y: height / 2 - imgDims.height / 2, width: imgDims.width, height: imgDims.height });
+                        }
+                    } catch (fileErr) { alert(`फाइल "${file.name}" को मर्ज नहीं किया जा सका।`); }
+                }
+
+                // Final Save
+                const finalPdfBytes = await mergedPdf.save();
+                const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = dynamicPdfName;
+                link.click();
+
+            } catch (error) {
+                console.error("PDF Merge Error:", error);
+                alert("फॉर्म जनरेट करते समय एक एरर आ गया: " + error.message);
+            } finally {
+                // Restore Buttons
+                downloadBtns.forEach(btn => btn.disabled = false);
+                loaders.forEach(l => l.style.display = 'none'); 
+            }
+        }
+    </script>
+</body>
+</html>
